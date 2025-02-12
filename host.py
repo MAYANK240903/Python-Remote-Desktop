@@ -35,8 +35,8 @@ def image_sender(client_socket):
             curr_time = getmstime()
             # print(curr_time)
             diff = curr_time-prev_time
-            prev_time = curr_time
             if diff>16:
+                prev_time = curr_time
                 screenshot = pyautogui.screenshot()
                 frame = np.array(screenshot)
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
