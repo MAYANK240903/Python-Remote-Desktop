@@ -70,7 +70,7 @@ def input_receiver(client_socket):
             x = round((x*host_width)/client_width)
             y = round((y*host_height)/client_height)
             mouse.position = (x, y)
-            print(command+" scaled coordinates: "+str(x)+" "+str(y))
+            # print(command+" scaled coordinates: "+str(x)+" "+str(y))
         elif command.startswith(" MOUSE_CLICK"):
             button = command.split()[1]
             if button == "LEFT":
