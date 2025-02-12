@@ -23,33 +23,45 @@ def kill_all_threads():
 def on_move(x, y):
     global last_mouse_position
     
-    if last_mouse_position is None:
-        last_mouse_position = (x, y)
+    if window_bounds is None:
+        return  # Window bounds not yet initialized
     
-    # Calculate the distance moved since the last position
-    dx = abs(x - last_mouse_position[0])
-    dy = abs(y - last_mouse_position[1])
-    
-    # Only send the command if the mouse has moved more than the threshold
-    if dx > MOVE_THRESHOLD or dy > MOVE_THRESHOLD:
-        command = f" MOUSE_MOVE {x} {y}"
-        try:
-            client_socket.sendall(command.encode('utf-8'))
-            # print(command)
-            last_mouse_position = (x, y)  # Update the last known position
-        except Exception as e:
-            print(f"Error sending mouse move: {e}")
+    # Check if the mouse is inside the client window
+    wx, wy, w_width, w_height = window_bounds
+    if wx <= x <= wx + w_width and wy <= y <= wy + w_height:
+        if last_mouse_position is None:
+            last_mouse_position = (x - wx, y - wy)  # Adjust for relative position inside the window
+        
+        # Calculate the distance moved since the last position (relative to the window)
+        dx = abs((x - wx) - last_mouse_position[0])
+        dy = abs((y - wy) - last_mouse_position[1])
+        
+        # Only send the command if the mouse has moved more than the threshold
+        if dx > MOVE_THRESHOLD or dy > MOVE_THRESHOLD:
+            command = f" MOUSE_MOVE {x - wx} {y - wy}"  # Send relative coordinates
+            try:
+                client_socket.sendall(command.encode('utf-8'))
+                last_mouse_position = (x - wx, y - wy)  # Update the last known position
+            except Exception as e:
+                print(f"Error sending mouse move: {e}")
+
 
 def on_click(x, y, button, pressed):
-    if pressed:
-        if button.name == 'left':
-            command = " MOUSE_CLICK LEFT"
-        elif button.name == 'right':
-            command = " MOUSE_CLICK RIGHT"
-        try:
-            client_socket.sendall(command.encode('utf-8'))
-        except Exception as e:
-            print(f"Error sending mouse click: {e}")
+    if window_bounds is None:
+        return  # Window bounds not yet initialized
+    
+    # Check if the mouse is inside the client window
+    wx, wy, w_width, w_height = window_bounds
+    if wx <= x <= wx + w_width and wy <= y <= wy + w_height:
+        if pressed:
+            if button.name == 'left':
+                command = " MOUSE_CLICK LEFT"
+            elif button.name == 'right':
+                command = " MOUSE_CLICK RIGHT"
+            try:
+                client_socket.sendall(command.encode('utf-8'))
+            except Exception as e:
+                print(f"Error sending mouse click: {e}")
 
 # Function to send keyboard events to the server
 def on_press(key):
@@ -71,8 +83,10 @@ def on_press(key):
 
 # Thread to handle receiving images from the host
 def image_receiver():
-    global running
+    global running, window_bounds
     try:
+        cv2.namedWindow('Remote Desktop',cv2.WINDOW_NORMAL)
+        cv2.setMouseCallback('Remote Desktop',lambda *args: None)
         while running:
             # Receive the size of the incoming frame
             size_data = client_socket.recv(4)
@@ -88,9 +102,14 @@ def image_receiver():
                     break
                 data += packet
             
+            x, y, width, height = cv2.getWindowImageRect('Remote Desktop')
+            window_bounds = (x, y, width, height)
             # Decode the frame
             img_encoded = np.frombuffer(data, dtype=np.uint8)
             frame = cv2.imdecode(img_encoded, cv2.IMREAD_COLOR)
+            
+            if width>0 and height>0:
+                frame = cv2.resize(frame,(width,height))
             
             # Display the frame
             cv2.imshow('Remote Desktop', frame)
