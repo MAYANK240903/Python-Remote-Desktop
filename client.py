@@ -69,6 +69,25 @@ def on_click(x, y, button, pressed):
             except Exception as e:
                 print(f"Error sending mouse click: {e}")
 
+def on_scroll(x, y, dx, dy):
+    if window_bounds is None:
+        return  # Window bounds not yet initialized
+    
+    # Check if the mouse is inside the client window
+    wx, wy, w_width, w_height = window_bounds
+    if wx <= x <= wx + w_width and wy <= y <= wy + w_height:
+        if dy > 0:
+            command = " MOUSE_SCROLL UP"
+        elif dy < 0:
+            command = " MOUSE_SCROLL DOWN"
+        else:
+            return  # No scroll action
+        
+        try:
+            client_socket.sendall(command.encode('utf-8'))
+        except Exception as e:
+            print(f"Error sending mouse scroll: {e}")
+
 # Function to send keyboard events to the server
 def on_press(key):
     try:
@@ -151,7 +170,7 @@ def main():
     image_thread.start()
     
     # Start listening for mouse and keyboard events
-    mouse_listener = MouseListener(on_move=on_move, on_click=on_click)
+    mouse_listener = MouseListener(on_move=on_move, on_click=on_click,on_scroll=on_scroll)
     keyboard_listener = KeyboardListener(on_press=on_press)
     
     mouse_listener.start()

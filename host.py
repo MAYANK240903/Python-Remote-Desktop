@@ -84,6 +84,12 @@ def input_receiver(client_socket):
                 break
             keyboard.press(key)
             keyboard.release(key)
+        elif command.startswith(" MOUSE_SCROLL"):
+            direction = command.split()[1]
+            if direction == "UP":
+                mouse.scroll(0, 1)  # Scroll up
+            elif direction == "DOWN":
+                mouse.scroll(0, -1)  # Scroll down
 
 
 
