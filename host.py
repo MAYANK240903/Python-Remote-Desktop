@@ -7,9 +7,12 @@ from pynput.mouse import Controller, Button
 from pynput.keyboard import Controller as KeyboardController, Key
 import time
 from time import sleep
+from screeninfo import get_monitors
 
 # Initialize mouse and keyboard controllers
 # global running
+host_width = get_monitors()[0].width
+host_height = get_monitors()[0].height
 running = threading.Event()
 running.set()
 mouse = Controller()
@@ -61,7 +64,13 @@ def input_receiver(client_socket):
         # print(command)
         if command.startswith(" MOUSE_MOVE"):
             x, y = map(int, command.split(" ")[2:4])
+            client_width, client_height = map(int, command.split(" ")[4:6])
+            # x = round(x*dpi)
+            # y = round(y*dpi)
+            x = round((x*host_width)/client_width)
+            y = round((y*host_height)/client_height)
             mouse.position = (x, y)
+            print(command+" scaled coordinates: "+str(x)+" "+str(y))
         elif command.startswith(" MOUSE_CLICK"):
             button = command.split()[1]
             if button == "LEFT":
@@ -82,6 +91,10 @@ def main():
     # Create a socket object
     global client_socket, image_sender_thread, input_receiver_thread
     global running
+
+    # global dpi
+    # dpi = float(input("Enter DPI: "))
+
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     
     # Bind the socket to a public host, and a well-known port

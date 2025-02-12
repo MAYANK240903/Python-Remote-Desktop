@@ -5,8 +5,11 @@ import numpy as np
 from pynput.mouse import Listener as MouseListener
 from pynput.keyboard import Listener as KeyboardListener
 import threading
+from screeninfo import get_monitors
 
 # Global variables
+client_width = get_monitors()[0].width
+client_height = get_monitors()[0].height
 client_socket = None
 running = True
 last_mouse_position = None  # To store the last known mouse position
@@ -38,7 +41,10 @@ def on_move(x, y):
         
         # Only send the command if the mouse has moved more than the threshold
         if dx > MOVE_THRESHOLD or dy > MOVE_THRESHOLD:
-            command = f" MOUSE_MOVE {x - wx} {y - wy}"  # Send relative coordinates
+            scaled_x, scaled_y = x - wx, y - wy
+            scaled_x = round((scaled_x*client_width)/w_width)
+            scaled_y = round((scaled_y*client_height)/w_height)
+            command = f" MOUSE_MOVE {scaled_x} {scaled_y} {client_width} {client_height}"  # Send relative coordinates
             try:
                 client_socket.sendall(command.encode('utf-8'))
                 last_mouse_position = (x - wx, y - wy)  # Update the last known position
@@ -128,6 +134,9 @@ def image_receiver():
 # Main function
 def main():
     global client_socket, running, mouse_listener, keyboard_listener, image_thread
+
+    #  global dpi
+    # dpi = float(input("Enter DPI: "))
     
     # Create a socket object
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
