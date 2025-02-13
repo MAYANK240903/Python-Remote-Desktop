@@ -79,11 +79,39 @@ def input_receiver(client_socket):
                 mouse.click(Button.right)
         elif command.startswith(" KEY_PRESS"):
             key = command.split()[1]
-            if(key=="ctrl_l"):
+            try:
+                key_attrib = getattr(Key,key)
+            except AttributeError:
+                key_attrib = key
+            keyboard.tap(key_attrib)
+        elif command.startswith(" KEY_DOWN"):
+            key = command.split()[1]
+            if key=="ctrl_l":
                 running.clear()
                 break
-            keyboard.press(key)
-            keyboard.release(key)
+            try:
+                key_attrib = getattr(Key,key)
+            except AttributeError:
+                key_attrib = key
+            keyboard.press(key_attrib)
+            # if key == "ctrl_r":
+            #     keyboard.press(Key.ctrl_r)
+            # elif key == "shift_l":
+            #     keyboard.press(Key.shift_l)
+            # elif key == "shift_r":
+            #     keyboard.press(Key.shift_r)
+            # elif key == "space":
+            #     keyboard.press
+        elif command.startswith(" KEY_UP"):
+            key = command.split()[1]
+            if key=="ctrl_l":
+                running.clear()
+                break
+            try:
+                key_attrib = getattr(Key,key)
+            except AttributeError:
+                key_attrib = key
+            keyboard.release(key_attrib)
         elif command.startswith(" MOUSE_SCROLL"):
             direction = command.split()[1]
             if direction == "UP":

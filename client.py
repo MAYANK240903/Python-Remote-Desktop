@@ -93,9 +93,27 @@ def on_press(key):
     try:
         command = f" KEY_PRESS {key.char}"
     except AttributeError:
-        command = f" KEY_PRESS {key.name}"
+        command = f" KEY_DOWN {key.name}"
     try:
         client_socket.sendall(command.encode('utf-8'))
+        print(command)
+    except Exception as e:
+        print(f"Error sending key press: {e}")
+    finally:
+        try:
+            if(key.name == "ctrl_l"):
+                kill_all_threads()
+        except:
+            pass
+
+def on_release(key):
+    try:
+        command = f" KEY_UP {key.name}"
+    except:
+        return
+    try:
+        client_socket.sendall(command.encode('utf-8'))
+        print(command)
     except Exception as e:
         print(f"Error sending key press: {e}")
     finally:
@@ -171,7 +189,7 @@ def main():
     
     # Start listening for mouse and keyboard events
     mouse_listener = MouseListener(on_move=on_move, on_click=on_click,on_scroll=on_scroll)
-    keyboard_listener = KeyboardListener(on_press=on_press)
+    keyboard_listener = KeyboardListener(on_press=on_press,on_release=on_release,suppress=True)
     
     mouse_listener.start()
     keyboard_listener.start()
