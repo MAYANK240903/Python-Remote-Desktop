@@ -8,6 +8,9 @@ from pynput.keyboard import Controller as KeyboardController, Key
 import time
 from time import sleep
 from screeninfo import get_monitors
+from mss import mss
+import d3dshot
+from turbojpeg import TurboJPEG
 
 # Initialize mouse and keyboard controllers
 # global running
@@ -31,22 +34,31 @@ def getmstime():
     return round(time.time()*1000)
 
 def image_sender(client_socket):
-    global running
+    global running, d
+    jpeg = TurboJPEG('C:\\libjpeg-turbo-gcc64\\bin\\libturbojpeg.dll')
     prev_time = getmstime()
+    # monitor = mss().monitors[1]
     while running.is_set():
         try:
             curr_time = getmstime()
             # print(curr_time)
             diff = curr_time-prev_time
-            if diff>16:
+            b = 0.0
+            # a = 0.0
+            if diff>6:
                 prev_time = curr_time
-                screenshot = pyautogui.screenshot()
+                # screenshot = pyautogui.screenshot()
+                # screenshot = mss().grab(monitor)
+                # b = getmstime()
+                screenshot = d.screenshot()
                 frame = np.array(screenshot)
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 
                 # Encode the frame as JPEG
-                _, img_encoded = cv2.imencode('.jpg', frame)
+                _, img_encoded = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY),50])
+                # img_encoded = jpeg.encode(frame, quality=50)
                 data = img_encoded.tobytes()
+                # print(getmstime()-b)
                 
                 # Send the size of the data first
                 size = len(data)
@@ -79,6 +91,8 @@ def input_receiver(client_socket):
                 mouse.click(Button.right)
         elif command.startswith(" KEY_PRESS"):
             key = command.split()[1]
+            if key == "None":
+                continue
             try:
                 key_attrib = getattr(Key,key)
             except AttributeError:
@@ -123,7 +137,7 @@ def input_receiver(client_socket):
 
 def main():
     # Create a socket object
-    global client_socket, image_sender_thread, input_receiver_thread
+    global client_socket, image_sender_thread, input_receiver_thread, d
     global running
 
     # global dpi
@@ -140,6 +154,8 @@ def main():
     server_socket.listen(5)
     print(f"Listening on {host}:{port}")
     
+    d = d3dshot.create(capture_output="numpy")
+
     # Accept connections from outside
     (client_socket, address) = server_socket.accept()
     print(f"Connection from {address}")

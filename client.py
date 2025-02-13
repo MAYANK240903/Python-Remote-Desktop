@@ -6,6 +6,7 @@ from pynput.mouse import Listener as MouseListener
 from pynput.keyboard import Listener as KeyboardListener
 import threading
 from screeninfo import get_monitors
+import time
 
 # Global variables
 client_width = get_monitors()[0].width
@@ -142,7 +143,7 @@ def keyboard_enabler(key):
 
 # Thread to handle receiving images from the host
 def image_receiver():
-    global running, window_bounds
+    global running, window_bounds, count
     try:
         cv2.namedWindow('Remote Desktop',cv2.WINDOW_NORMAL)
         cv2.setMouseCallback('Remote Desktop',lambda *args: None)
@@ -172,7 +173,7 @@ def image_receiver():
             
             # Display the frame
             cv2.imshow('Remote Desktop', frame)
-            
+            count += 1
             # Exit on 'q' key press
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 running = False
@@ -186,7 +187,7 @@ def image_receiver():
 
 # Main function
 def main():
-    global client_socket, running, mouse_listener, keyboard_listener, keyboard_enable, image_thread
+    global client_socket, running, mouse_listener, keyboard_listener, keyboard_enable, image_thread, count
 
     #  global dpi
     # dpi = float(input("Enter DPI: "))
@@ -210,12 +211,14 @@ def main():
     
     mouse_listener.start()
     keyboard_listener.start()
-    
+    count = 0
 
     try:
         # Keep the main thread alive until the user exits
         while running:
-            sleep(2)
+            sleep(1)
+            print(count)
+            count = 0
     except KeyboardInterrupt:
         print("Exiting...")
     finally:
