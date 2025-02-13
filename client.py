@@ -90,9 +90,15 @@ def on_scroll(x, y, dx, dy):
 
 # Function to send keyboard events to the server
 def on_press(key):
+    global keyboard_enable
     try:
         command = f" KEY_PRESS {key.char}"
     except AttributeError:
+        if key.name == "alt_l":
+            keyboard_listener.stop()
+            keyboard_enable = KeyboardListener(on_press=keyboard_enabler)
+            keyboard_enable.start()
+            return
         command = f" KEY_DOWN {key.name}"
     try:
         client_socket.sendall(command.encode('utf-8'))
@@ -123,6 +129,16 @@ def on_release(key):
         except:
             pass
 
+def keyboard_enabler(key):
+    global keyboard_listener
+    try:
+        if key.name == "alt_l":
+            keyboard_enable.stop() 
+            keyboard_listener = KeyboardListener(on_press=on_press,on_release=on_release,suppress=True)
+            keyboard_listener.start()
+            return
+    except:
+        pass
 
 # Thread to handle receiving images from the host
 def image_receiver():
@@ -170,7 +186,7 @@ def image_receiver():
 
 # Main function
 def main():
-    global client_socket, running, mouse_listener, keyboard_listener, image_thread
+    global client_socket, running, mouse_listener, keyboard_listener, keyboard_enable, image_thread
 
     #  global dpi
     # dpi = float(input("Enter DPI: "))
@@ -190,10 +206,12 @@ def main():
     # Start listening for mouse and keyboard events
     mouse_listener = MouseListener(on_move=on_move, on_click=on_click,on_scroll=on_scroll)
     keyboard_listener = KeyboardListener(on_press=on_press,on_release=on_release,suppress=True)
+    keyboard_enable = KeyboardListener(on_press=keyboard_enabler)
     
     mouse_listener.start()
     keyboard_listener.start()
     
+
     try:
         # Keep the main thread alive until the user exits
         while running:
