@@ -10,6 +10,7 @@ import time
 import tkinter as tk
 from tkinter import filedialog
 import os
+from ipaddress import ip_address,IPv4Address
 
 # Global variables
 client_width = get_monitors()[0].width
@@ -327,11 +328,20 @@ def main():
     file_transfer_active = False
     file_sharing_thread = threading.Thread(target=handle_file_transfer)
     # Create a socket object
-    client_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
     
-    # Connect to the host
     host = input("Enter the host IP address: ")
     port = 9999
+
+    try:
+        if type(ip_address(host)) is IPv4Address:
+            client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        else:
+            client_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+    except:
+        print("Invalid IP Address!")
+        return
+            
+    # Connect to the host
     client_socket.connect((host, port))
     ctrl_r_pressed = False
     count = 0

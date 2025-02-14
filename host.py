@@ -265,6 +265,7 @@ def main():
     host = '::'  # Listen on all available interfaces
     port = 9999
     server_socket.bind((host, port))
+    server_socket.settimeout(10.0)
     
     # Become a server socket
     server_socket.listen(5)
