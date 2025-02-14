@@ -327,7 +327,7 @@ def main():
     file_transfer_active = False
     file_sharing_thread = threading.Thread(target=handle_file_transfer)
     # Create a socket object
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
     
     # Connect to the host
     host = input("Enter the host IP address: ")

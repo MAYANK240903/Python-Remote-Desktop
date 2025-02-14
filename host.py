@@ -49,7 +49,7 @@ def image_sender(client_socket):
             diff = curr_time-prev_time
             b = 0.0
             # a = 0.0
-            if diff>6:
+            if diff>32:
                 prev_time = curr_time
                 # screenshot = pyautogui.screenshot()
                 # screenshot = mss().grab(monitor)
@@ -59,7 +59,7 @@ def image_sender(client_socket):
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 
                 # Encode the frame as JPEG
-                _, img_encoded = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY),50])
+                _, img_encoded = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY),5])
                 # img_encoded = jpeg.encode(frame, quality=50)
                 data = img_encoded.tobytes()
                 # print(getmstime()-b)
@@ -153,7 +153,8 @@ def input_receiver(client_socket):
 
 def handle_file_transfer():
     global file_transfer_active
-    file_server_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+    file_server_socket = socket.socket(socket.AF_INET6,socket.SOCK_STREAM)
+    file_server_socket.setsockopt(socket.IPPROTO_IPV6,socket.IPV6_V6ONLY,0)
     file_port = 9998
     file_server_socket.bind((host,file_port))
     file_server_socket.listen(5)
@@ -258,10 +259,10 @@ def main():
     # dpi = float(input("Enter DPI: "))
 
     file_transfer_active = False
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    
+    server_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+    server_socket.setsockopt(socket.IPPROTO_IPV6,socket.IPV6_V6ONLY,0)
     # Bind the socket to a public host, and a well-known port
-    host = '0.0.0.0'  # Listen on all available interfaces
+    host = '::'  # Listen on all available interfaces
     port = 9999
     server_socket.bind((host, port))
     
