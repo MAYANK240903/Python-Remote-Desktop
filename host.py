@@ -11,6 +11,9 @@ from screeninfo import get_monitors
 from mss import mss
 import d3dshot
 from turbojpeg import TurboJPEG
+import os
+import tkinter as tk
+from tkinter import filedialog
 
 # Initialize mouse and keyboard controllers
 # global running
@@ -23,6 +26,7 @@ keyboard = KeyboardController()
 
 def kill_all_threads():
     try:
+        # print("Exiting...")
         running.clear()
         client_socket.close()
         image_sender_thread.join()
@@ -70,7 +74,8 @@ def image_sender(client_socket):
             running.clear()
         
 def input_receiver(client_socket):
-    global running
+    global running, ctrl_r_pressed, file_sharing_thread, file_transfer_active
+    ctrl_r_pressed = False
     while running.is_set():
         command = client_socket.recv(1024).decode('utf-8')
         # print(command)
@@ -93,6 +98,15 @@ def input_receiver(client_socket):
             key = command.split()[1]
             if key == "None":
                 continue
+            if key == "f" and ctrl_r_pressed:
+                file_transfer_active = not file_transfer_active
+                if file_sharing_thread.is_alive():
+                    file_sharing_thread.join()
+                    print("File Sharing Stopped!")
+                else:
+                    file_sharing_thread = threading.Thread(target=handle_file_transfer)
+                    file_sharing_thread.start()
+                continue
             try:
                 key_attrib = getattr(Key,key)
             except AttributeError:
@@ -103,6 +117,8 @@ def input_receiver(client_socket):
             if key=="ctrl_l":
                 running.clear()
                 break
+            if key=="ctrl_r":
+                ctrl_r_pressed = True
             try:
                 key_attrib = getattr(Key,key)
             except AttributeError:
@@ -121,6 +137,8 @@ def input_receiver(client_socket):
             if key=="ctrl_l":
                 running.clear()
                 break
+            if key=="ctrl_r":
+                ctrl_r_pressed = False
             try:
                 key_attrib = getattr(Key,key)
             except AttributeError:
@@ -133,16 +151,113 @@ def input_receiver(client_socket):
             elif direction == "DOWN":
                 mouse.scroll(0, -1)  # Scroll down
 
+def handle_file_transfer():
+    global file_transfer_active
+    file_server_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+    file_port = 9998
+    file_server_socket.bind((host,file_port))
+    file_server_socket.listen(5)
+    (file_socket,address) = file_server_socket.accept()
+    print("File Transfer Connected!")
+    try:
+        while file_transfer_active:
+            # Wait for the client's file action command
+            binary_action = file_socket.recv(1024)
+            action = binary_action.decode('utf-8').strip().lower()
+            if action == "receive":
+                print("Client requested to receive a file.")
+                
+                # Open Windows Explorer file selection dialog on the host
+                root = tk.Tk()
+                root.withdraw()  # Hide the main tkinter window
+                file_path = filedialog.askopenfilename(
+                    title="Select a file to send",
+                    filetypes=[("All Files", "*.*")]
+                )
+                root.destroy()  # Destroy the tkinter window after selection
+                
+                if not file_path:  # If no file is selected
+                    print("No file selected. Aborting transfer.")
+                    file_socket.sendall(b"FILE_TRANSFER_ABORT")
+                    file_transfer_active = not file_transfer_active
+                    continue
+                
+                file_name = os.path.basename(file_path)
+                file_size = os.path.getsize(file_path)
+                
+                # Send metadata
+                file_socket.sendall(f"FILE_TRANSFER:{file_name}:{file_size}".encode('utf-8'))
+                sleep(1)
+                # Send the file data in chunks
+                with open(file_path, 'rb') as f:
+                    bytes_sent = 0
+                    while chunk := f.read(4096):  # Read in chunks of 4KB
+                        file_socket.sendall(chunk)
+                        bytes_sent += len(chunk)
+                print(f"File '{file_name}' sent successfully.")
+                file_transfer_active = not file_transfer_active
+            
+            elif action == "send":
+                print("Client requested to send a file.")
+                
+                # Receive metadata
+                print("RECEIVER ON!")
+                metadata = file_socket.recv(1024).decode('utf-8')
+                # metadata = b"\n"
+                # while b"\n" not in metadata:
+                #     chunk = file_socket.recv(1024)
+                #     if not chunk:
+                #         break
+                # metadata = metadata.decode('utf-8').strip()
+                # print(metadata)
+                if not metadata.startswith("FILE_TRANSFER"):
+                    print("Invalid file transfer request.")
+                    file_transfer_active = not file_transfer_active
+                    continue
+                
+                _, file_name, file_size = metadata.split(":")
+                file_size = int(file_size)
+                # print(metadata)
+                print("Receiving File!")
+                # Save the file to the current working directory
+                save_path = os.path.join(os.getcwd(), file_name)
+                with open(save_path, 'wb') as f:
+                    bytes_received = 0
+                    while bytes_received < file_size:
+                        chunk = file_socket.recv(min(4096, file_size - bytes_received))
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        bytes_received += len(chunk)
+                print(f"File '{file_name}' received and saved to '{save_path}'.")
+                file_transfer_active = not file_transfer_active
+
+            elif action == "close":
+                file_transfer_active = not file_transfer_active
+
+            else:
+                print(binary_action)
+                print("Invalid action received from client.")
+    
+    except Exception as e:
+        print(f"Error during file transfer: {e}")
+        file_transfer_active = False
+    
+    finally:
+        file_server_socket.close()
+        file_socket.close()
+        print("File Transfer Closed!")
 
 
 def main():
     # Create a socket object
-    global client_socket, image_sender_thread, input_receiver_thread, d
+    global client_socket, host, image_sender_thread, input_receiver_thread, d, file_transfer_active, file_sharing_thread
     global running
 
     # global dpi
     # dpi = float(input("Enter DPI: "))
 
+    file_transfer_active = False
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     
     # Bind the socket to a public host, and a well-known port
@@ -165,6 +280,7 @@ def main():
         image_sender_thread.start()
         input_receiver_thread = threading.Thread(target=lambda: input_receiver(client_socket=client_socket))
         input_receiver_thread.start()
+        file_sharing_thread = threading.Thread(target=handle_file_transfer)
         while running.is_set():
             sleep(2)
             # Capture the screen
@@ -178,6 +294,7 @@ def main():
         client_socket.close()
         image_sender_thread.join()
         input_receiver_thread.join()
+        print("Exiting...")
 
 
 if __name__ == "__main__":
