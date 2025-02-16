@@ -9,8 +9,8 @@ import time
 from time import sleep
 from screeninfo import get_monitors
 from mss import mss
-import d3dshot
-from turbojpeg import TurboJPEG
+# import d3dshot
+# from turbojpeg import TurboJPEG
 import os
 import tkinter as tk
 from tkinter import filedialog
@@ -39,9 +39,9 @@ def getmstime():
 
 def image_sender(client_socket):
     global running, d
-    jpeg = TurboJPEG('C:\\libjpeg-turbo-gcc64\\bin\\libturbojpeg.dll')
+    # jpeg = TurboJPEG('C:\\libjpeg-turbo-gcc64\\bin\\libturbojpeg.dll')
     prev_time = getmstime()
-    # monitor = mss().monitors[1]
+    monitor = mss().monitors[1]
     while running.is_set():
         try:
             curr_time = getmstime()
@@ -49,17 +49,17 @@ def image_sender(client_socket):
             diff = curr_time-prev_time
             b = 0.0
             # a = 0.0
-            if diff>32:
+            if diff>5:
                 prev_time = curr_time
                 # screenshot = pyautogui.screenshot()
-                # screenshot = mss().grab(monitor)
+                screenshot = mss().grab(monitor)
                 # b = getmstime()
-                screenshot = d.screenshot()
+                # screenshot = d.screenshot()
                 frame = np.array(screenshot)
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 
                 # Encode the frame as JPEG
-                _, img_encoded = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY),5])
+                _, img_encoded = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY),50])
                 # img_encoded = jpeg.encode(frame, quality=50)
                 data = img_encoded.tobytes()
                 # print(getmstime()-b)
@@ -271,7 +271,7 @@ def main():
     server_socket.listen(5)
     print(f"Listening on {host}:{port}")
     
-    d = d3dshot.create(capture_output="numpy")
+    # d = d3dshot.create(capture_output="numpy")
 
     # Accept connections from outside
     (client_socket, address) = server_socket.accept()

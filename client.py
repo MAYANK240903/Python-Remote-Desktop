@@ -224,7 +224,7 @@ def image_receiver():
 
 def handle_file_transfer():
     global file_transfer_active, action
-    file_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+    file_socket = socket.socket(socket.AF_INET6,socket.SOCK_STREAM)
     file_port = 9998
     sleep(1)
     file_socket.connect((host,file_port))
