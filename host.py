@@ -15,7 +15,7 @@ import os
 import tkinter as tk
 from tkinter import filedialog
 
-# Initialize mouse and keyboard controllers
+
 # global running
 host_width = get_monitors()[0].width
 host_height = get_monitors()[0].height
@@ -26,13 +26,25 @@ keyboard = KeyboardController()
 
 def kill_all_threads():
     try:
-        # print("Exiting...")
+        global running
+        print("Exiting...")
         running.clear()
         client_socket.close()
         image_sender_thread.join()
         input_receiver_thread.join()
     except:
         pass
+
+def counter(starttime,connection_time):
+    global running
+    endtime = starttime+(connection_time*60)
+    while running.is_set():
+        sleep(1)
+        curr_time = time.time()
+        if curr_time >= endtime:
+            print(f"Time Over.\nConnection Lasted for {connection_time} minutes.")
+            kill_all_threads()
+            return
 
 def getmstime():
     return round(time.time()*1000)
@@ -49,7 +61,7 @@ def image_sender(client_socket):
             diff = curr_time-prev_time
             b = 0.0
             # a = 0.0
-            if diff>16:
+            if diff>6:
                 prev_time = curr_time
                 # screenshot = pyautogui.screenshot()
                 # screenshot = mss().grab(monitor)
@@ -59,16 +71,14 @@ def image_sender(client_socket):
                 frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 
                 # Encode the frame as JPEG
-                _, img_encoded = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY),15])
+                _, img_encoded = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY),75])
                 # img_encoded = jpeg.encode(frame, quality=50)
                 data = img_encoded.tobytes()
                 # print(getmstime()-b)
                 
-                # Send the size of the data first
                 size = len(data)
                 client_socket.sendall(size.to_bytes(4, byteorder='big'))
                 
-                # Send the actual data
                 client_socket.sendall(data)
         except:
             running.clear()
@@ -77,7 +87,10 @@ def input_receiver(client_socket):
     global running, ctrl_r_pressed, file_sharing_thread, file_transfer_active
     ctrl_r_pressed = False
     while running.is_set():
-        command = client_socket.recv(1024).decode('utf-8')
+        try:
+            command = client_socket.recv(1024).decode('utf-8')
+        except:
+            pass
         # print(command)
         if command.startswith(" MOUSE_MOVE"):
             x, y = map(int, command.split(" ")[2:4])
@@ -162,22 +175,20 @@ def handle_file_transfer():
     print("File Transfer Connected!")
     try:
         while file_transfer_active:
-            # Wait for the client's file action command
             binary_action = file_socket.recv(1024)
             action = binary_action.decode('utf-8').strip().lower()
             if action == "receive":
                 print("Client requested to receive a file.")
                 
-                # Open Windows Explorer file selection dialog on the host
                 root = tk.Tk()
-                root.withdraw()  # Hide the main tkinter window
+                root.withdraw()
                 file_path = filedialog.askopenfilename(
                     title="Select a file to send",
                     filetypes=[("All Files", "*.*")]
                 )
-                root.destroy()  # Destroy the tkinter window after selection
+                root.destroy()
                 
-                if not file_path:  # If no file is selected
+                if not file_path:
                     print("No file selected. Aborting transfer.")
                     file_socket.sendall(b"FILE_TRANSFER_ABORT")
                     file_transfer_active = not file_transfer_active
@@ -192,7 +203,7 @@ def handle_file_transfer():
                 # Send the file data in chunks
                 with open(file_path, 'rb') as f:
                     bytes_sent = 0
-                    while chunk := f.read(4096):  # Read in chunks of 4KB
+                    while chunk := f.read(4096):
                         file_socket.sendall(chunk)
                         bytes_sent += len(chunk)
                 print(f"File '{file_name}' sent successfully.")
@@ -251,29 +262,67 @@ def handle_file_transfer():
 
 
 def main():
-    # Create a socket object
-    global client_socket, host, image_sender_thread, input_receiver_thread, d, file_transfer_active, file_sharing_thread
+    global client_socket, host, image_sender_thread, input_receiver_thread, d, file_transfer_active, file_sharing_thread, timed
     global running
 
     # global dpi
     # dpi = float(input("Enter DPI: "))
 
+    host = '::'
+    port = 9999
+
+    #host authentication
+    print("Checking Authentication...")
+    authentication_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+    authentication_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+    authentication_socket.bind((host,port))
+    authentication_socket.listen(5)
+    (auth_accept,address) = authentication_socket.accept()
+    cred = auth_accept.recv(1024).decode('utf-8')
+    cred.strip()
+    # print(cred)
+    try:
+        cred_file = open(f"{os.path.dirname(__file__)}\\cred_file.txt",'r')
+    except FileNotFoundError:
+        print("cred_file.txt does not exist in script location.\nPlease make one with format {username}:{password}\nExiting...")
+        return
+    allowed = True if cred in cred_file.read() else False
+    if not allowed:
+        print("Invalid Credentials.\nUnauthorized Access.")
+        auth_accept.sendall(b"unauthorized")
+        auth_accept.close()
+        authentication_socket.close()
+        return
+    else:
+        cred_file.seek(0)
+        lines = cred_file.readlines()
+        cred_line = [line for line in lines if line.startswith(cred)][0].split(":")
+        if len(cred_line) == 3:
+            connection_time = int(cred_line[2])
+            # int typecasting here?
+            timed = True
+            auth_accept.sendall(f"authorized:{connection_time}".encode('utf-8'))
+            print(f"Timed Connection Established for {connection_time} minutes.")
+            starttime = time.time()
+            counter_thread = threading.Thread(target=lambda: counter(starttime,connection_time))
+            counter_thread.start()
+        else:
+            auth_accept.sendall(b"authorized")
+        print("Authorized Client Connected!")
+        auth_accept.close()
+        authentication_socket.close()
+
     file_transfer_active = False
     server_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
     server_socket.setsockopt(socket.IPPROTO_IPV6,socket.IPV6_V6ONLY,0)
-    # Bind the socket to a public host, and a well-known port
-    host = '::'  # Listen on all available interfaces
-    port = 9999
     server_socket.bind((host, port))
-    server_socket.settimeout(10.0)
+    server_socket.settimeout(30.0)
     
-    # Become a server socket
     server_socket.listen(5)
     print(f"Listening on {host}:{port}")
     
     d = d3dshot.create(capture_output="numpy")
 
-    # Accept connections from outside
     (client_socket, address) = server_socket.accept()
     print(f"Connection from {address}")
     running.set()
@@ -285,8 +334,6 @@ def main():
         file_sharing_thread = threading.Thread(target=handle_file_transfer)
         while running.is_set():
             sleep(2)
-            # Capture the screen
-            # Receive input commands from the client
                 
     except Exception as e:
         print(f"Error: {e}")

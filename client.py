@@ -1,5 +1,5 @@
 import socket
-from time import sleep
+from time import sleep,time
 import cv2
 import numpy as np
 from pynput.mouse import Listener as MouseListener
@@ -26,11 +26,25 @@ def kill_all_threads():
     running = False
     client_socket.close()
     mouse_listener.stop()
-    keyboard_listener.stop()
+    if keyboard_listener.is_alive():
+        keyboard_listener.stop()
+    if keyboard_enable.is_alive():
+        keyboard_enable.stop()
     image_thread.join()
-    file_sharing_thread.join()
+    if file_sharing_thread.is_alive():
+        file_sharing_thread.join()
 
-# Function to send mouse events to the server
+def counter(starttime,connection_time):
+    global running
+    endtime = starttime+(connection_time*60)
+    while running:
+        sleep(1)
+        curr_time = time.time()
+        if curr_time >= endtime:
+            print(f"Time Over.\nConnection Lasted {connection_time} minutes.")
+            kill_all_threads()
+            return
+
 def on_move(x, y):
     global last_mouse_position
     
@@ -96,7 +110,6 @@ def on_scroll(x, y, dx, dy):
         except Exception as e:
             print(f"Error sending mouse scroll: {e}")
 
-# Function to send keyboard events to the server
 def on_press(key):
     global keyboard_enable, ctrl_r_pressed, file_transfer_active, file_sharing_thread, action, keyboard_listener
     try:
@@ -176,20 +189,23 @@ def keyboard_enabler(key):
     except:
         pass
 
-# Thread to handle receiving images from the host
 def image_receiver():
-    global running, window_bounds, count
+    global running, window_bounds, count, frame
     try:
+        prev_time = time.time()
+        fps = 0
+        frame_count = 0
+        fps_display = 0
         cv2.namedWindow('Remote Desktop',cv2.WINDOW_NORMAL)
         cv2.setMouseCallback('Remote Desktop',lambda *args: None)
         while running:
-            # Receive the size of the incoming frame
+            # receive size of incoming frame
             size_data = client_socket.recv(4)
             if not size_data:
                 break
             size = int.from_bytes(size_data, byteorder='big')
             
-            # Receive the frame data
+            # receive frame data
             data = b""
             while len(data) < size:
                 packet = client_socket.recv(size - len(data))
@@ -199,14 +215,25 @@ def image_receiver():
             
             x, y, width, height = cv2.getWindowImageRect('Remote Desktop')
             window_bounds = (x, y, width, height)
-            # Decode the frame
+            # decode the frame
             img_encoded = np.frombuffer(data, dtype=np.uint8)
             frame = cv2.imdecode(img_encoded, cv2.IMREAD_COLOR)
             
             if width>0 and height>0:
                 frame = cv2.resize(frame,(width,height))
             
-            # Display the frame
+            frame_count += 1
+
+            curr_time = time.time()
+            elapsed_time = curr_time - prev_time
+            if elapsed_time >= 1.0:
+                fps_display = frame_count / elapsed_time
+                frame_count = 0
+                prev_time = curr_time 
+
+            cv2.putText(frame,f"FPS: {int(fps_display)}",(5, 30),cv2.FONT_HERSHEY_SIMPLEX,1,(255, 255, 255),2)
+
+
             cv2.imshow('Remote Desktop', frame)
             count += 1
             # Exit on 'q' key press
@@ -223,8 +250,8 @@ def image_receiver():
         running = False
 
 def handle_file_transfer():
-    global file_transfer_active, action
-    file_socket = socket.socket(socket.AF_INET6,socket.SOCK_STREAM)
+    global file_transfer_active, action, IPv4
+    file_socket = socket.socket(socket.AF_INET,socket.SOCK_STREAM) if IPv4 else socket.socket(socket.AF_INET6,socket.SOCK_STREAM)
     file_port = 9998
     sleep(1)
     file_socket.connect((host,file_port))
@@ -237,16 +264,15 @@ def handle_file_transfer():
                 continue
 
             elif action == "send":
-                # Open Windows Explorer file selection dialog on the client
                 root = tk.Tk()
-                root.withdraw()  # Hide the main tkinter window
+                root.withdraw()
                 file_path = filedialog.askopenfilename(
                     title="Select a file to send",
                     filetypes=[("All Files", "*.*")]
                 )
-                root.destroy()  # Destroy the tkinter window after selection
+                root.destroy()
                 
-                if not file_path:  # If no file is selected
+                if not file_path:
                     print("No file selected. Aborting transfer.")
                     file_transfer_active = not file_transfer_active
                     continue
@@ -254,7 +280,6 @@ def handle_file_transfer():
                 file_name = os.path.basename(file_path)
                 file_size = os.path.getsize(file_path)
                 
-                # Notify the host that we are sending a file
                 file_socket.sendall(b"send")
                 
                 # Send metadata
@@ -263,14 +288,13 @@ def handle_file_transfer():
                 # Send the file data in chunks
                 with open(file_path, 'rb') as f:
                     bytes_sent = 0
-                    while chunk := f.read(4096):  # Read in chunks of 4KB
+                    while chunk := f.read(4096):
                         file_socket.sendall(chunk)
                         bytes_sent += len(chunk)
                 print(f"File '{file_name}' sent successfully.")
                 file_transfer_active = not file_transfer_active
             
             elif action == "receive":
-                # Notify the host that we want to receive a file
                 file_socket.sendall(b"receive")
                 
                 # Receive metadata
@@ -318,9 +342,8 @@ def handle_file_transfer():
         print("File Transfer Closed!")
 
 
-# Main function
 def main():
-    global client_socket, host, running, mouse_listener, keyboard_listener, keyboard_enable, image_thread, count, file_sharing_thread, file_transfer_active, ctrl_r_pressed
+    global client_socket, host, running, mouse_listener, keyboard_listener, keyboard_enable, image_thread, count, file_sharing_thread, file_transfer_active, ctrl_r_pressed, timed, IPv4, frame
 
     #  global dpi
     # dpi = float(input("Enter DPI: "))
@@ -333,14 +356,47 @@ def main():
     port = 9999
 
     try:
-        if type(ip_address(host)) is IPv4Address:
-            client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        else:
-            client_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        IPv4 = True if type(ip_address(host)) is IPv4Address else False
     except:
         print("Invalid IP Address!")
         return
-            
+    
+    # client authentication test
+    if IPv4:
+        authentication_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    else:
+        authentication_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+    
+    authentication_socket.connect((host,port))
+
+    username = input("Enter Username: ")
+    password = input("Enter Password: ")
+    if username.strip() == "" or password.strip() == "":
+        print("Empty Username or Password is not allowed!")
+        return
+    
+    authentication_socket.sendall(f"{username}:{password}".encode('utf-8'))
+
+    response = authentication_socket.recv(1024).decode('utf-8')
+    if response == "unauthorized":
+        print("Invalid Credentials.\nUnauthorized Access!")
+        authentication_socket.close()
+        return
+    elif response.startswith("authorized:"):
+        connection_time = int(response.split(":")[1])
+        print(f"Timed Connection Established for {connection_time} minutes.")
+        starttime = time.time()
+        counter_thread = threading.Thread(target=lambda: counter(starttime,connection_time))
+        counter_thread.start()
+        timed = True
+    authentication_socket.close()
+    sleep(0.5)
+    if IPv4:
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    else:
+        client_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+
+
     # Connect to the host
     client_socket.connect((host, port))
     ctrl_r_pressed = False
@@ -361,12 +417,14 @@ def main():
         # Keep the main thread alive until the user exits
         while running:
             sleep(1)
-            print("FPS: ",count)
+            # print("FPS: ",count)
             count = 0
     except KeyboardInterrupt:
         print("Exiting...")
     finally:
         running = False
+        if timed:
+            counter_thread.join()
         client_socket.close()
         mouse_listener.stop()
         keyboard_listener.stop()
