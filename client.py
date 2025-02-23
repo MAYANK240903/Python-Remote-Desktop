@@ -11,6 +11,7 @@ import tkinter as tk
 from tkinter import filedialog
 import os
 from ipaddress import ip_address,IPv4Address
+from turbojpeg import TurboJPEG
 
 # Global variables
 client_width = get_monitors()[0].width
@@ -192,6 +193,7 @@ def keyboard_enabler(key):
 def image_receiver():
     global running, window_bounds, count, frame
     try:
+        jpeg = TurboJPEG('C:\\libjpeg-turbo-gcc64\\bin\\libturbojpeg.dll')
         prev_time = time.time()
         fps = 0
         frame_count = 0
@@ -216,9 +218,9 @@ def image_receiver():
             x, y, width, height = cv2.getWindowImageRect('Remote Desktop')
             window_bounds = (x, y, width, height)
             # decode the frame
-            img_encoded = np.frombuffer(data, dtype=np.uint8)
-            frame = cv2.imdecode(img_encoded, cv2.IMREAD_COLOR)
-            
+            # img_encoded = np.frombuffer(data, dtype=np.uint8)
+            # frame = cv2.imdecode(img_encoded, cv2.IMREAD_COLOR)
+            frame = jpeg.decode(data)
             if width>0 and height>0:
                 frame = cv2.resize(frame,(width,height))
             

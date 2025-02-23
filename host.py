@@ -9,11 +9,12 @@ import time
 from time import sleep
 from screeninfo import get_monitors
 # from mss import mss
-import d3dshot
-# from turbojpeg import TurboJPEG
+# import d3dshot
+from turbojpeg import TurboJPEG
 import os
 import tkinter as tk
 from tkinter import filedialog
+import bettercam
 
 
 # global running
@@ -26,10 +27,11 @@ keyboard = KeyboardController()
 
 def kill_all_threads():
     try:
-        global running
+        global running, camera
         print("Exiting...")
         running.clear()
         client_socket.close()
+        del camera
         image_sender_thread.join()
         input_receiver_thread.join()
     except:
@@ -51,7 +53,7 @@ def getmstime():
 
 def image_sender(client_socket):
     global running, d
-    # jpeg = TurboJPEG('C:\\libjpeg-turbo-gcc64\\bin\\libturbojpeg.dll')
+    jpeg = TurboJPEG('C:\\libjpeg-turbo-gcc64\\bin\\libturbojpeg.dll')
     prev_time = getmstime()
     # monitor = mss().monitors[1]
     while running.is_set():
@@ -61,26 +63,28 @@ def image_sender(client_socket):
             diff = curr_time-prev_time
             b = 0.0
             # a = 0.0
-            if diff>6:
+            if diff>0:
                 prev_time = curr_time
                 # screenshot = pyautogui.screenshot()
                 # screenshot = mss().grab(monitor)
                 # b = getmstime()
-                screenshot = d.screenshot()
-                frame = np.array(screenshot)
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                frame = camera.get_latest_frame()
+                # screenshot = d.screenshot()
+                # frame = np.array(screenshot)
+                # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 
                 # Encode the frame as JPEG
-                _, img_encoded = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY),75])
-                # img_encoded = jpeg.encode(frame, quality=50)
-                data = img_encoded.tobytes()
+                # _, img_encoded = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY),75])
+                img_encoded = jpeg.encode(frame)
+                data = img_encoded
                 # print(getmstime()-b)
                 
                 size = len(data)
                 client_socket.sendall(size.to_bytes(4, byteorder='big'))
                 
                 client_socket.sendall(data)
-        except:
+        except Exception as e:
+            print(e)
             running.clear()
         
 def input_receiver(client_socket):
@@ -262,7 +266,7 @@ def handle_file_transfer():
 
 
 def main():
-    global client_socket, host, image_sender_thread, input_receiver_thread, d, file_transfer_active, file_sharing_thread, timed
+    global client_socket, host, image_sender_thread, input_receiver_thread, d, file_transfer_active, file_sharing_thread, timed, camera
     global running
 
     # global dpi
@@ -272,6 +276,10 @@ def main():
     port = 9999
 
     #host authentication
+    # print(bettercam.device_info())
+    # print(bettercam.output_info())
+    camera = bettercam.create(output_color="BGR")
+    camera.start(target_fps=144)
     print("Checking Authentication...")
     authentication_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
     authentication_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
@@ -321,7 +329,7 @@ def main():
     server_socket.listen(5)
     print(f"Listening on {host}:{port}")
     
-    d = d3dshot.create(capture_output="numpy")
+    # d = d3dshot.create(capture_output="numpy")
 
     (client_socket, address) = server_socket.accept()
     print(f"Connection from {address}")
