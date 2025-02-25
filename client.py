@@ -344,7 +344,7 @@ def handle_file_transfer():
         print("File Transfer Closed!")
 
 
-def main():
+def main(ip,usr,passwd):
     global client_socket, host, running, mouse_listener, keyboard_listener, keyboard_enable, image_thread, count, file_sharing_thread, file_transfer_active, ctrl_r_pressed, timed, IPv4, frame
 
     #  global dpi
@@ -354,7 +354,8 @@ def main():
     file_sharing_thread = threading.Thread(target=handle_file_transfer)
     # Create a socket object
     
-    host = input("Enter the host IP address: ")
+    # host = input("Enter the host IP address: ")
+    host = ip
     port = 9999
 
     try:
@@ -371,8 +372,10 @@ def main():
     
     authentication_socket.connect((host,port))
 
-    username = input("Enter Username: ")
-    password = input("Enter Password: ")
+    # username = input("Enter Username: ")
+    # password = input("Enter Password: ")
+    username = usr
+    password = passwd
     if username.strip() == "" or password.strip() == "":
         print("Empty Username or Password is not allowed!")
         return

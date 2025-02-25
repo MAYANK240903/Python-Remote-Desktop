@@ -31,6 +31,7 @@ def kill_all_threads():
         print("Exiting...")
         running.clear()
         client_socket.close()
+        camera.stop()
         del camera
         image_sender_thread.join()
         input_receiver_thread.join()
@@ -54,37 +55,49 @@ def getmstime():
 def image_sender(client_socket):
     global running, d
     jpeg = TurboJPEG('C:\\libjpeg-turbo-gcc64\\bin\\libturbojpeg.dll')
-    prev_time = getmstime()
+    # prev_time = getmstime()
+    # prev_frame = jpeg.encode(camera.get_latest_frame())
     # monitor = mss().monitors[1]
     while running.is_set():
         try:
-            curr_time = getmstime()
+            # curr_time = getmstime()
             # print(curr_time)
-            diff = curr_time-prev_time
-            b = 0.0
+            # diff = curr_time-prev_time
+            # b = 0.0
             # a = 0.0
-            if diff>0:
-                prev_time = curr_time
-                # screenshot = pyautogui.screenshot()
-                # screenshot = mss().grab(monitor)
-                # b = getmstime()
-                frame = camera.get_latest_frame()
-                # screenshot = d.screenshot()
-                # frame = np.array(screenshot)
-                # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                
-                # Encode the frame as JPEG
-                # _, img_encoded = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY),75])
-                img_encoded = jpeg.encode(frame)
-                data = img_encoded
-                # print(getmstime()-b)
-                
-                size = len(data)
-                client_socket.sendall(size.to_bytes(4, byteorder='big'))
-                
-                client_socket.sendall(data)
+            # if diff>0:
+            
+            # screenshot = pyautogui.screenshot()
+            # screenshot = mss().grab(monitor)
+            # b = getmstime()
+            frame = camera.get_latest_frame()
+            # time_elapsed = (curr_time-prev_time)//1000
+            # if frame is None and time_elapsed>=1:
+            #     client_socket.sendall(len(prev_frame).to_bytes(4, byteorder='big'))
+            #     client_socket.sendall(prev_frame)
+            #     prev_time = curr_time
+            # elif frame is None:
+            #     client_socket.sendall(len(prev_frame).to_bytes(4, byteorder='big'))
+            #     client_socket.sendall(prev_frame)
+            #     continue
+            # screenshot = d.screenshot()
+            # frame = np.array(screenshot)
+            # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Encode the frame as JPEG
+            # _, img_encoded = cv2.imencode('.jpg', frame, [int(cv2.IMWRITE_JPEG_QUALITY),75])
+            data = jpeg.encode(frame)
+            # data = img_encoded
+            # print(getmstime()-b)
+            
+            size = len(data)
+            client_socket.sendall(size.to_bytes(4, byteorder='big'))
+            
+            client_socket.sendall(data)
+            # prev_frame = data
         except Exception as e:
             print(e)
+            kill_all_threads()
             running.clear()
         
 def input_receiver(client_socket):
@@ -264,6 +277,10 @@ def handle_file_transfer():
         file_socket.close()
         print("File Transfer Closed!")
 
+def add_user(newusr,newpasswd,newtime):
+    f = open(f"{os.path.dirname(__file__)}\\cred_file.txt",'a')
+    f.write(f"\n{newusr}:{newpasswd}:{newtime}")
+    print("Successfully Added New User!")
 
 def main():
     global client_socket, host, image_sender_thread, input_receiver_thread, d, file_transfer_active, file_sharing_thread, timed, camera
@@ -278,12 +295,11 @@ def main():
     #host authentication
     # print(bettercam.device_info())
     # print(bettercam.output_info())
-    camera = bettercam.create(output_color="BGR")
-    camera.start(target_fps=144)
     print("Checking Authentication...")
     authentication_socket = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
     authentication_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
     authentication_socket.bind((host,port))
+    authentication_socket.settimeout(30.0)
     authentication_socket.listen(5)
     (auth_accept,address) = authentication_socket.accept()
     cred = auth_accept.recv(1024).decode('utf-8')
@@ -333,6 +349,8 @@ def main():
 
     (client_socket, address) = server_socket.accept()
     print(f"Connection from {address}")
+    camera = bettercam.create(output_color="BGR")
+    camera.start(target_fps=144)
     running.set()
     try:
         image_sender_thread = threading.Thread(target=lambda: image_sender(client_socket=client_socket))

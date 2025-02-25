@@ -6,3 +6,4 @@ pynput
 PyTurboJPEG
 screeninfo
 tk
+bettercam
